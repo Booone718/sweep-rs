@@ -1,0 +1,10 @@
+.DS_Store
+.superpowers/
+node_modules/
+dist/
+coverage/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/.tauri/
+*.log
+

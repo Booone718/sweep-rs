@@ -75,4 +75,4 @@ Sweep v0.1.0 只处理用户可访问路径，不安装管理员 helper，不做
 
 ## License
 
-暂未指定许可证。
+MIT License. See [LICENSE](LICENSE).

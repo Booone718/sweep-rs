@@ -25,6 +25,9 @@ export type ScanProgress = {
 
 export type HistoryEntry = {
   id: string;
+  eventType: "scan" | "clean";
+  totalBytes: number;
+  itemCount: number;
   cleanedBytes: number;
   movedItemCount: number;
   createdAt: string;

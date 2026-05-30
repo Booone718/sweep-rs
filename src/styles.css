@@ -279,6 +279,51 @@ button {
   color: #63706c;
 }
 
+.selected-breakdown {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0 2px;
+  border-top: 1px solid rgba(22, 32, 29, 0.08);
+}
+
+.selected-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  color: #16201d;
+  font-size: 13px;
+}
+
+.selected-breakdown-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-breakdown-row i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.selected-breakdown-row strong {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+
+.selected-review-button {
+  width: 100%;
+}
+
 .success-strip,
 .alert,
 .scan-progress-panel {
@@ -353,9 +398,17 @@ button {
   grid-template-columns: 42px 1fr;
   grid-template-rows: auto auto;
   gap: 12px;
+  width: 100%;
   min-height: 180px;
   padding: 18px;
   border-radius: 20px;
+  color: #16201d;
+  text-align: left;
+}
+
+.category-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 52px rgba(22, 32, 29, 0.12);
 }
 
 .category-icon {
@@ -429,7 +482,13 @@ button {
   min-height: 36px;
   padding: 0 12px;
   border-radius: 999px;
+  color: #16201d;
   background: #eef3ef;
+}
+
+.review-filters button.active {
+  color: white;
+  background: #16201d;
 }
 
 .review-filters span {
@@ -461,11 +520,28 @@ button {
   min-width: 0;
 }
 
-.review-row label span,
+.file-identity,
 .review-row p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-identity {
+  display: grid;
+  gap: 3px;
+}
+
+.file-identity strong,
+.file-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-identity small {
+  color: #63706c;
+  font-size: 12px;
 }
 
 .review-row p {

@@ -80,10 +80,72 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "开始扫描" }));
 
     await waitFor(() => expect(api.getScanReport).toHaveBeenCalledWith("scan-1"));
-    expect(screen.getByText("缓存")).toBeInTheDocument();
-    expect(screen.getByText("大文件")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "缓存" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "大文件" })).toBeInTheDocument();
     expect(screen.getByText("已默认选择 1 项低风险内容")).toBeInTheDocument();
     expect(screen.getByText("已选择 100 B")).toBeInTheDocument();
+  });
+
+  it("shows selected bytes by category and opens a selected-only review", async () => {
+    api.getScanReport.mockResolvedValue({
+      ...report,
+      totalBytes: 1_370,
+      items: [
+        {
+          id: "cache-1",
+          path: "/Users/test/Library/Caches/a",
+          displayName: "a",
+          category: "cache",
+          sizeBytes: 100,
+          risk: "low",
+          reason: "缓存",
+          defaultSelected: true
+        },
+        {
+          id: "log-1",
+          path: "/Users/test/Library/Logs/app.log",
+          displayName: "app.log",
+          category: "logs",
+          sizeBytes: 300,
+          risk: "low",
+          reason: "日志",
+          defaultSelected: true
+        },
+        {
+          id: "crash-1",
+          path: "/Users/test/Library/Logs/DiagnosticReports/app.crash",
+          displayName: "app.crash",
+          category: "crash_reports",
+          sizeBytes: 70,
+          risk: "low",
+          reason: "崩溃报告",
+          defaultSelected: true
+        },
+        {
+          id: "large-1",
+          path: "/Users/test/Movies/big.mov",
+          displayName: "big.mov",
+          category: "large_files",
+          sizeBytes: 900,
+          risk: "review",
+          reason: "大文件",
+          defaultSelected: false
+        }
+      ]
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "开始扫描" }));
+
+    expect(await screen.findByTestId("selected-breakdown")).toHaveTextContent("缓存100 B");
+    expect(screen.getByTestId("selected-breakdown")).toHaveTextContent("日志300 B");
+    expect(screen.getByTestId("selected-breakdown")).toHaveTextContent("崩溃报告70 B");
+
+    fireEvent.click(screen.getByRole("button", { name: "查看已选择" }));
+
+    expect(await screen.findByText("app.log")).toBeInTheDocument();
+    expect(screen.getByText("已显示 3 / 3 项")).toBeInTheDocument();
+    expect(screen.queryByText("big.mov")).not.toBeInTheDocument();
   });
 
   it("shows live scan progress with the current folder and checked file count", async () => {
@@ -126,5 +188,50 @@ describe("App", () => {
 
     expect(await screen.findByText("已显示 250 / 640 项")).toBeInTheDocument();
     expect(screen.getAllByTestId("review-row")).toHaveLength(250);
+  });
+
+  it("opens review filtered to a category when a dashboard category is clicked", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "开始扫描" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /大文件/ }));
+
+    expect(await screen.findByText("big.mov")).toBeInTheDocument();
+    expect(screen.queryByText("a")).not.toBeInTheDocument();
+    expect(screen.getByText("/Users/test/Movies/big.mov")).toBeInTheDocument();
+  });
+
+  it("filters review rows with the category buttons", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "开始扫描" }));
+    fireEvent.click(await screen.findByRole("button", { name: "审阅" }));
+    fireEvent.click(await screen.findByRole("button", { name: "大文件" }));
+
+    expect(await screen.findByText("big.mov")).toBeInTheDocument();
+    expect(screen.queryByText("a")).not.toBeInTheDocument();
+  });
+
+  it("refreshes history with scan summaries after a scan finishes", async () => {
+    api.getHistory
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "scan-history",
+          eventType: "scan",
+          totalBytes: 940,
+          itemCount: 2,
+          cleanedBytes: 0,
+          movedItemCount: 0,
+          createdAt: "2026-05-30T15:25:00Z"
+        }
+      ]);
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "开始扫描" }));
+    fireEvent.click(await screen.findByRole("button", { name: "历史" }));
+
+    expect(await screen.findByText("扫描记录")).toBeInTheDocument();
+    expect(screen.getByText("发现 2 项候选")).toBeInTheDocument();
+    expect(screen.getByText("940 B")).toBeInTheDocument();
   });
 });

@@ -118,7 +118,17 @@ impl Default for UserSettings {
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {
     pub id: String,
+    #[serde(default = "default_history_event_type")]
+    pub event_type: String,
+    #[serde(default)]
+    pub total_bytes: u64,
+    #[serde(default)]
+    pub item_count: usize,
     pub cleaned_bytes: u64,
     pub moved_item_count: usize,
     pub created_at: String,
+}
+
+fn default_history_event_type() -> String {
+    "clean".to_string()
 }

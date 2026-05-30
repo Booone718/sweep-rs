@@ -33,11 +33,12 @@ import {
 import { CATEGORY_LABELS, summarizeCategories } from "./lib/categories";
 import { formatBytes, formatItemCount } from "./lib/format";
 import { waitForScanReport } from "./lib/polling";
-import { createInitialSelection, toggleCategory, toggleItem } from "./lib/selection";
+import { createInitialSelection, toggleItem } from "./lib/selection";
 import type { CleanReport, CleanupCategory, ScanItem, ScanReport, UserSettings } from "./types";
 
 type View = "overview" | "review" | "history" | "settings";
 type RunState = "idle" | "scanning" | "ready" | "cleaning" | "cleaned" | "error";
+type CategoryFilter = CleanupCategory | "all" | "selected";
 const REVIEW_BATCH_SIZE = 250;
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -93,6 +94,7 @@ export default function App() {
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [cleanReport, setCleanReport] = useState<CleanReport | null>(null);
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  const [reviewFilter, setReviewFilter] = useState<CategoryFilter>("all");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -133,6 +135,7 @@ export default function App() {
     }
     return report.items.filter((item) => selection.has(item.id));
   }, [report, selection]);
+  const selectedSummaries = useMemo(() => summarizeCategories(selectedItems), [selectedItems]);
   const selectedBytes = selectedItems.reduce((sum, item) => sum + item.sizeBytes, 0);
   const defaultSelectedCount = report?.items.filter((item) => item.defaultSelected && item.risk === "low").length ?? 0;
 
@@ -155,6 +158,7 @@ export default function App() {
       setSelection(createInitialSelection(nextReport.items));
       setScanProgress(null);
       setRunState("ready");
+      setHistory(await getHistory().catch(() => history));
     } catch (scanError) {
       setRunState("error");
       setError(scanError instanceof Error ? scanError.message : "扫描失败");
@@ -258,12 +262,21 @@ export default function App() {
           <Overview
             defaultSelectedCount={defaultSelectedCount}
             onClean={() => void handleClean()}
+            onOpenCategory={(category) => {
+              setReviewFilter(category);
+              setView("review");
+            }}
+            onOpenSelected={() => {
+              setReviewFilter("selected");
+              setView("review");
+            }}
             includeProtectedUserFolders={settings.includeProtectedUserFolders}
             report={report}
             runState={runState}
             scanProgress={scanProgress}
             selectedBytes={selectedBytes}
             selectedCount={selection.size}
+            selectedSummaries={selectedSummaries}
             summaries={summaries}
             cleanReport={cleanReport}
           />
@@ -271,13 +284,12 @@ export default function App() {
 
         {view === "review" && report ? (
           <Review
+            categoryFilter={reviewFilter}
             items={report.items}
             selection={selection}
+            onFilterChange={setReviewFilter}
             onReveal={(path) => void revealPath(path)}
             onToggleItem={(id) => setSelection((current) => toggleItem(current, id))}
-            onToggleCategory={(category, selected) =>
-              setSelection((current) => toggleCategory(current, report.items, category, selected))
-            }
           />
         ) : null}
 
@@ -303,6 +315,7 @@ export default function App() {
 type OverviewProps = {
   report: ScanReport | null;
   summaries: ReturnType<typeof summarizeCategories>;
+  selectedSummaries: ReturnType<typeof summarizeCategories>;
   selectedBytes: number;
   selectedCount: number;
   defaultSelectedCount: number;
@@ -310,12 +323,15 @@ type OverviewProps = {
   cleanReport: CleanReport | null;
   scanProgress: ScanProgress | null;
   includeProtectedUserFolders: boolean;
+  onOpenCategory: (category: CleanupCategory) => void;
+  onOpenSelected: () => void;
   onClean: () => void;
 };
 
 function Overview({
   report,
   summaries,
+  selectedSummaries,
   selectedBytes,
   selectedCount,
   defaultSelectedCount,
@@ -323,6 +339,8 @@ function Overview({
   cleanReport,
   scanProgress,
   includeProtectedUserFolders,
+  onOpenCategory,
+  onOpenSelected,
   onClean
 }: OverviewProps) {
   return (
@@ -340,6 +358,25 @@ function Overview({
         <div className="selection-meter">
           <span>已选择 {formatBytes(selectedBytes)}</span>
           <small>已默认选择 {defaultSelectedCount} 项低风险内容</small>
+          {selectedSummaries.length > 0 ? (
+            <div className="selected-breakdown" data-testid="selected-breakdown">
+              {selectedSummaries.slice(0, 5).map((summary) => (
+                <div className="selected-breakdown-row" key={summary.category}>
+                  <span>
+                    <i style={{ backgroundColor: CATEGORY_ACCENTS[summary.category] }} />
+                    {summary.label}
+                  </span>
+                  <strong>{formatBytes(summary.sizeBytes)}</strong>
+                </div>
+              ))}
+              {selectedSummaries.length > 5 ? <small>还有 {selectedSummaries.length - 5} 类已选择项目</small> : null}
+            </div>
+          ) : (
+            <small>暂无已选择项目</small>
+          )}
+          <button className="ghost-button selected-review-button" disabled={!report || selectedCount === 0} onClick={onOpenSelected}>
+            查看已选择
+          </button>
           <button className="danger-button" disabled={!report || selectedCount === 0 || runState === "cleaning"} onClick={onClean}>
             {runState === "cleaning" ? <Loader2 className="spin" size={18} /> : <Trash2 size={18} />}
             移到废纸篓
@@ -365,7 +402,7 @@ function Overview({
           </div>
         ) : (
           summaries.map((summary) => (
-            <article className="category-card" key={summary.category}>
+            <button className="category-card" key={summary.category} onClick={() => onOpenCategory(summary.category)}>
               <div className="category-icon" style={{ backgroundColor: CATEGORY_ACCENTS[summary.category] }}>
                 <ChevronRight size={18} />
               </div>
@@ -377,7 +414,7 @@ function Overview({
               <span>
                 {formatItemCount(summary.count)} · {summary.reviewCount > 0 ? `${summary.reviewCount} 项需确认` : "低风险"}
               </span>
-            </article>
+            </button>
           ))
         )}
       </section>
@@ -404,41 +441,70 @@ function ScanProgressPanel({ progress }: { progress: ScanProgress | null }) {
 }
 
 type ReviewProps = {
+  categoryFilter: CategoryFilter;
   items: ScanItem[];
   selection: Set<string>;
+  onFilterChange: (filter: CategoryFilter) => void;
   onToggleItem: (id: string) => void;
-  onToggleCategory: (category: CleanupCategory, selected: boolean) => void;
   onReveal: (path: string) => void;
 };
 
-function Review({ items, selection, onToggleItem, onToggleCategory, onReveal }: ReviewProps) {
+function Review({ categoryFilter, items, selection, onFilterChange, onToggleItem, onReveal }: ReviewProps) {
   const categories = summarizeCategories(items);
+  const filteredItems =
+    categoryFilter === "selected"
+      ? items.filter((item) => selection.has(item.id))
+      : categoryFilter === "all"
+        ? items
+        : items.filter((item) => item.category === categoryFilter);
   const [visibleCount, setVisibleCount] = useState(REVIEW_BATCH_SIZE);
-  const visibleItems = items.slice(0, visibleCount);
+  const visibleItems = filteredItems.slice(0, visibleCount);
 
   useEffect(() => {
     setVisibleCount(REVIEW_BATCH_SIZE);
-  }, [items]);
+  }, [categoryFilter, items]);
 
   return (
     <section className="review-layout">
       <div className="review-toolbar">
         <div className="review-filters">
+          <button
+            className={categoryFilter === "all" ? "active" : ""}
+            onClick={() => onFilterChange("all")}
+            aria-pressed={categoryFilter === "all"}
+          >
+            全部
+          </button>
+          <button
+            className={categoryFilter === "selected" ? "active" : ""}
+            onClick={() => onFilterChange("selected")}
+            aria-pressed={categoryFilter === "selected"}
+          >
+            已选择
+          </button>
           {categories.map((category) => (
-            <button key={category.category} onClick={() => onToggleCategory(category.category, true)}>
+            <button
+              className={categoryFilter === category.category ? "active" : ""}
+              key={category.category}
+              onClick={() => onFilterChange(category.category)}
+              aria-pressed={categoryFilter === category.category}
+            >
               <span style={{ backgroundColor: CATEGORY_ACCENTS[category.category] }} />
-              选择{category.label}
+              {category.label}
             </button>
           ))}
         </div>
-        <p>已显示 {Math.min(visibleCount, items.length)} / {items.length} 项</p>
+        <p>已显示 {Math.min(visibleCount, filteredItems.length)} / {filteredItems.length} 项</p>
       </div>
       <div className="review-table">
         {visibleItems.map((item) => (
           <article className="review-row" data-testid="review-row" key={item.id}>
             <label>
               <input checked={selection.has(item.id)} onChange={() => onToggleItem(item.id)} type="checkbox" />
-              <span>{item.displayName}</span>
+              <span className="file-identity">
+                <strong>{item.displayName}</strong>
+                <small>{item.path}</small>
+              </span>
             </label>
             <span className={`risk-badge ${item.risk}`}>{riskLabel(item)}</span>
             <span>{CATEGORY_LABELS[item.category]}</span>
@@ -450,12 +516,12 @@ function Review({ items, selection, onToggleItem, onToggleCategory, onReveal }: 
           </article>
         ))}
       </div>
-      {visibleCount < items.length ? (
+      {visibleCount < filteredItems.length ? (
         <button
           className="ghost-button load-more-button"
-          onClick={() => setVisibleCount((current) => Math.min(current + REVIEW_BATCH_SIZE, items.length))}
+          onClick={() => setVisibleCount((current) => Math.min(current + REVIEW_BATCH_SIZE, filteredItems.length))}
         >
-          再显示 {Math.min(REVIEW_BATCH_SIZE, items.length - visibleCount)} 项
+          再显示 {Math.min(REVIEW_BATCH_SIZE, filteredItems.length - visibleCount)} 项
         </button>
       ) : null}
     </section>
@@ -465,21 +531,36 @@ function Review({ items, selection, onToggleItem, onToggleCategory, onReveal }: 
 function HistoryView({ entries }: { entries: HistoryEntry[] }) {
   return (
     <section className="plain-panel">
-      <h3>清理历史</h3>
+      <h3>历史</h3>
       {entries.length === 0 ? (
-        <p>还没有清理记录。应用只保存摘要，不保存完整文件清单。</p>
+        <p>还没有历史记录。应用只保存摘要，不保存完整文件清单。</p>
       ) : (
         entries.map((entry) => (
           <div className="history-row" key={entry.id}>
             <Clock3 size={17} />
-            <span>{new Date(entry.createdAt).toLocaleString("zh-CN")}</span>
-            <strong>{formatBytes(entry.cleanedBytes)}</strong>
-            <small>{formatItemCount(entry.movedItemCount)}</small>
+            <span>
+              <strong>{entry.eventType === "scan" ? "扫描记录" : "清理记录"}</strong>
+              <small>{formatHistoryDate(entry.createdAt)}</small>
+            </span>
+            <strong>{formatBytes(entry.eventType === "scan" ? entry.totalBytes : entry.cleanedBytes)}</strong>
+            <small>
+              {entry.eventType === "scan"
+                ? `发现 ${entry.itemCount} 项候选`
+                : `移到废纸篓 ${formatItemCount(entry.movedItemCount)}`}
+            </small>
           </div>
         ))
       )}
     </section>
   );
+}
+
+function formatHistoryDate(value: string): string {
+  const parsed = /^\d+$/.test(value) ? new Date(Number(value) * 1000) : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString("zh-CN");
 }
 
 type SettingsViewProps = {

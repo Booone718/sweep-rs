@@ -104,6 +104,7 @@ pub fn start_scan(
         };
 
         report.session_id = session_id_for_thread.clone();
+        let _ = record_scan_history(&report);
         let _ = store_report(&state_for_thread, &session_id_for_thread, report.clone());
         let _ = app.emit(
             "scan_completed",
@@ -190,7 +191,7 @@ pub fn clean_items(
         moved_item_count,
         failed_items,
     };
-    record_history(&clean_report).map_err(|error| error.to_string())?;
+    record_clean_history(&clean_report).map_err(|error| error.to_string())?;
     let _ = app.emit(
         "clean_completed",
         serde_json::json!({ "sessionId": request.session_id, "cleanedBytes": cleaned_bytes, "movedItemCount": moved_item_count }),
@@ -254,12 +255,33 @@ fn store_failed(state: &Arc<AppState>, session_id: &str, error: String) -> Resul
     Ok(())
 }
 
-fn record_history(report: &CleanReport) -> std::io::Result<()> {
+fn record_scan_history(report: &ScanReport) -> std::io::Result<()> {
     let mut history = storage::load_history();
     history.insert(
         0,
         HistoryEntry {
             id: Uuid::new_v4().to_string(),
+            event_type: "scan".to_string(),
+            total_bytes: report.total_bytes,
+            item_count: report.items.len(),
+            cleaned_bytes: 0,
+            moved_item_count: 0,
+            created_at: now_iso_like(),
+        },
+    );
+    history.truncate(50);
+    storage::save_history(&history)
+}
+
+fn record_clean_history(report: &CleanReport) -> std::io::Result<()> {
+    let mut history = storage::load_history();
+    history.insert(
+        0,
+        HistoryEntry {
+            id: Uuid::new_v4().to_string(),
+            event_type: "clean".to_string(),
+            total_bytes: report.cleaned_bytes,
+            item_count: report.moved_item_count,
             cleaned_bytes: report.cleaned_bytes,
             moved_item_count: report.moved_item_count,
             created_at: now_iso_like(),

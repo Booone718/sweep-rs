@@ -16,4 +16,17 @@ describe("scan progress layout guardrails", () => {
     expect(css).toMatch(/\.scan-progress-panel div\s*\{[^}]*flex:\s*1 1 auto;/s);
     expect(css).toMatch(/\.scan-progress-panel strong\s*\{[^}]*text-overflow:\s*ellipsis;/s);
   });
+
+  it("keeps the sidebar viewport-bound while the workspace owns scrolling", () => {
+    expect(css).toMatch(/body\s*\{[^}]*overflow:\s*hidden;/s);
+    expect(css).toMatch(/\.app-shell\s*\{[^}]*height:\s*100vh;/s);
+    expect(css).toMatch(/\.sidebar\s*\{[^}]*height:\s*100vh;/s);
+    expect(css).toMatch(/\.workspace\s*\{[^}]*overflow-y:\s*auto;/s);
+  });
+
+  it("reserves review filter and scrollbar space to prevent category jumps", () => {
+    expect(css).toMatch(/\.workspace\s*\{[^}]*scrollbar-gutter:\s*stable;/s);
+    expect(css).toMatch(/\.review-filters\s*\{[^}]*min-height:\s*82px;/s);
+    expect(css).toMatch(/\.review-toolbar p\s*\{[^}]*width:\s*150px;/s);
+  });
 });

@@ -20,7 +20,8 @@ body {
   margin: 0;
   min-width: 960px;
   min-height: 100vh;
-  overflow-x: hidden;
+  height: 100vh;
+  overflow: hidden;
   background:
     linear-gradient(135deg, rgba(23, 165, 137, 0.16), transparent 34%),
     linear-gradient(315deg, rgba(255, 122, 89, 0.14), transparent 28%),
@@ -42,12 +43,17 @@ button {
   grid-template-columns: 248px minmax(0, 1fr);
   min-width: 0;
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
   gap: 28px;
+  min-height: 0;
+  height: 100vh;
+  overflow-y: auto;
   padding: 28px 20px;
   background: rgba(255, 255, 255, 0.78);
   border-right: 1px solid rgba(22, 32, 29, 0.08);
@@ -155,7 +161,11 @@ button {
 
 .workspace {
   min-width: 0;
-  overflow: hidden;
+  min-height: 0;
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 28px;
 }
 
@@ -475,8 +485,10 @@ button {
   display: flex;
   flex: 1 1 auto;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 10px;
   min-width: 0;
+  min-height: 82px;
 }
 
 .review-actions {
@@ -488,8 +500,10 @@ button {
 
 .review-toolbar p {
   flex: 0 0 auto;
+  width: 150px;
   margin: 8px 0 0;
   color: #63706c;
+  text-align: right;
   white-space: nowrap;
 }
 

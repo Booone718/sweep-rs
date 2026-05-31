@@ -21,13 +21,13 @@ Sweep is a local-first macOS cleanup app built with Tauri 2, Rust, React, and Ty
 
 ## Install
 
-Download the latest `Sweep_0.1.0_aarch64.dmg` from GitHub Releases, open it, and drag `Sweep.app` into Applications.
+Download the latest `Sweep_0.1.1_aarch64.dmg` from GitHub Releases, open it, and drag `Sweep.app` into Applications.
 
 If macOS reports that the app is from an unidentified developer, it is because this early build is not signed or notarized. You can allow it from System Settings, or build the app locally from source.
 
 ## Safety Model
 
-Sweep v0.1.0 only works with paths available to the current user. It does not install a privileged helper, request administrator access, or perform system-level deletion.
+Sweep v0.1.1 only works with paths available to the current user. It does not install a privileged helper, request administrator access, or perform system-level deletion.
 
 Browser cleanup is limited to caches and temporary download residue. Sweep does not clean browser cookies, history, passwords, sessions, or site data.
 

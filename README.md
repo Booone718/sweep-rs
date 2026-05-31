@@ -1,70 +1,89 @@
 # Sweep
 
-Sweep 是一个 macOS 本地优先的桌面清理工具，使用 Tauri 2、Rust、React 和 TypeScript 构建。它的目标不是自动删除所有可疑文件，而是先扫描、分类、展示风险，再由用户审阅后把选中的项目移到废纸篓。
+Sweep is a local-first macOS cleanup app built with Tauri 2, Rust, React, and TypeScript. It is designed for review-first cleanup: scan the machine, group candidates by category or folder, explain the risk, and move only the selected items to the macOS Trash.
 
-> 当前项目处于早期开发阶段。首个发布版本面向 macOS Apple Silicon，本地开发构建未做 Apple 签名和 notarization。
+> Sweep is currently early-stage software. The first release targets Apple Silicon Macs. Local builds are not Apple-signed or notarized yet.
 
-## 功能
+## Features
 
-- 扫描当前用户目录下的缓存、日志、崩溃报告、下载残留、大文件、重复文件、浏览器缓存和应用残留。
-- 默认只选择低风险项目，高风险或需要判断的项目必须手动确认。
-- 清理动作默认移动到 macOS 废纸篓，不直接硬删除文件。
-- 审阅页显示文件名、完整路径、分类、大小、风险和原因。
-- 概览页显示已选择空间，并按类别拆分已选择内容。
-- 保存扫描和清理摘要历史，但不保存完整扫描文件清单。
-- 本地优先，不默认上传路径、文件名、扫描结果或遥测数据。
+- Scans common cleanup targets such as caches, logs, crash reports, downloads, browser caches, large files, duplicate files, iOS backups, and app leftovers.
+- Keeps cleanup recoverable by moving selected items to Trash instead of permanently deleting them.
+- Selects low-risk items by default while requiring manual confirmation for high-risk or review-needed files.
+- Provides a review page with file-level and folder-level views.
+- Supports category filters, batch select, and batch deselect for the current review scope.
+- Shows the selected cleanup size and category breakdown before cleanup.
+- Stores scan and cleanup summary history without storing full scan result manifests.
+- Remembers the app window size between launches.
+- Avoids macOS privacy-protected folders during extended user-directory scans to reduce permission prompts.
+- Runs locally and does not upload paths, filenames, scan results, or telemetry by default.
 
-## 安装
+## Install
 
-从 GitHub Releases 下载最新的 `Sweep_0.1.0_aarch64.dmg`，打开后将 `Sweep.app` 拖入 Applications。
+Download the latest `Sweep_0.1.0_aarch64.dmg` from GitHub Releases, open it, and drag `Sweep.app` into Applications.
 
-如果 macOS 提示应用来自未识别开发者，这是因为当前构建未签名。可以在系统设置的隐私与安全中手动允许打开，或从源码本地构建。
+If macOS reports that the app is from an unidentified developer, it is because this early build is not signed or notarized. You can allow it from System Settings, or build the app locally from source.
 
-## 开发
+## Safety Model
 
-环境要求：
+Sweep v0.1.0 only works with paths available to the current user. It does not install a privileged helper, request administrator access, or perform system-level deletion.
+
+Browser cleanup is limited to caches and temporary download residue. Sweep does not clean browser cookies, history, passwords, sessions, or site data.
+
+## Review Workflow
+
+1. Start a scan from the overview page.
+2. Review candidates by category.
+3. Switch between file and folder views when a category contains many items.
+4. Select or deselect individual items, folder groups, or the current filtered result set.
+5. Move selected items to Trash.
+
+## Development
+
+Requirements:
 
 - macOS
 - Node.js
 - Rust stable
-- Tauri 2 所需的本地构建工具
+- Native build tools required by Tauri 2
 
-安装依赖：
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-启动开发版：
+Run the Tauri development app:
 
 ```bash
 npm run tauri -- dev
 ```
 
-运行测试：
+Run frontend tests:
 
 ```bash
 npm test
-cd src-tauri && cargo test
 ```
 
-构建 macOS 应用包：
+Run Rust tests:
+
+```bash
+cd src-tauri
+cargo test
+```
+
+Build the macOS app and installer:
 
 ```bash
 npm run tauri -- build
 ```
 
-构建产物默认位于：
+Build outputs are written under:
 
 ```text
 src-tauri/target/release/bundle/
 ```
 
-## 安全边界
-
-Sweep v0.1.0 只处理用户可访问路径，不安装管理员 helper，不做系统级特权删除。浏览器清理只覆盖缓存和临时下载残留，不清理 Cookie、历史记录、密码或站点数据。
-
-## 技术栈
+## Tech Stack
 
 - Tauri 2
 - Rust

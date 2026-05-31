@@ -129,6 +129,29 @@ fn scan_directory_skips_macos_privacy_protected_user_folders_by_default() {
 }
 
 #[test]
+fn scan_directory_does_not_enter_macos_privacy_protected_user_folders_when_full_scan_is_enabled() {
+    let home = tempdir().unwrap();
+    write_file(&home.path().join("Library/Caches/keep.tmp"), b"cache");
+    write_file(&home.path().join("Downloads/installer.dmg"), b"installer");
+    write_file(&home.path().join("Documents/debug.log"), b"log");
+
+    let report = scan_directory(ScanOptions {
+        home_dir: home.path().to_path_buf(),
+        exclusions: vec![],
+        large_file_threshold_bytes: 100_000,
+        duplicate_min_size_bytes: 1,
+        include_browser_caches: true,
+        include_protected_user_folders: true,
+    })
+    .unwrap();
+
+    let item_paths: Vec<_> = report.items.iter().map(|item| item.path.as_str()).collect();
+    assert!(item_paths.iter().any(|path| path.contains("keep.tmp")));
+    assert!(!item_paths.iter().any(|path| path.contains("installer.dmg")));
+    assert!(!item_paths.iter().any(|path| path.contains("debug.log")));
+}
+
+#[test]
 fn scan_directory_emits_file_progress_for_visible_work() {
     let home = tempdir().unwrap();
     write_file(&home.path().join("Library/Caches/keep.tmp"), b"cache");
@@ -157,9 +180,9 @@ fn scan_directory_emits_file_progress_for_visible_work() {
 #[test]
 fn duplicate_detection_groups_files_by_content_hash() {
     let home = tempdir().unwrap();
-    let first = home.path().join("Documents/a.txt");
-    let second = home.path().join("Downloads/b.txt");
-    let unique = home.path().join("Downloads/c.txt");
+    let first = home.path().join("Library/Preferences/dupes/a.bin");
+    let second = home.path().join("Library/Preferences/dupes/b.bin");
+    let unique = home.path().join("Library/Preferences/dupes/c.bin");
     write_file(&first, b"same-data");
     write_file(&second, b"same-data");
     write_file(&unique, b"different");
@@ -183,8 +206,8 @@ fn duplicate_detection_groups_files_by_content_hash() {
 #[test]
 fn duplicate_detection_skips_files_that_disappear_during_scan() {
     let home = tempdir().unwrap();
-    let first = home.path().join("Documents/a.txt");
-    let second = home.path().join("Downloads/b.txt");
+    let first = home.path().join("Library/Preferences/dupes/a.bin");
+    let second = home.path().join("Library/Preferences/dupes/b.bin");
     write_file(&first, b"same-data");
     write_file(&second, b"same-data");
 

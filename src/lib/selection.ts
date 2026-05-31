@@ -14,19 +14,10 @@ export function toggleItem(selection: Set<string>, itemId: string): Set<string> 
   return next;
 }
 
-export function toggleCategory(
-  selection: Set<string>,
-  items: ScanItem[],
-  category: CleanupCategory,
-  selected: boolean
-): Set<string> {
+export function setItemsSelected(selection: Set<string>, items: ScanItem[], selected: boolean): Set<string> {
   const next = new Set(selection);
 
   for (const item of items) {
-    if (item.category !== category) {
-      continue;
-    }
-
     if (selected) {
       next.add(item.id);
     } else {
@@ -37,3 +28,15 @@ export function toggleCategory(
   return next;
 }
 
+export function toggleCategory(
+  selection: Set<string>,
+  items: ScanItem[],
+  category: CleanupCategory,
+  selected: boolean
+): Set<string> {
+  return setItemsSelected(
+    selection,
+    items.filter((item) => item.category === category),
+    selected
+  );
+}

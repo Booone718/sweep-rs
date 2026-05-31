@@ -211,6 +211,76 @@ describe("App", () => {
     expect(screen.queryByText("a")).not.toBeInTheDocument();
   });
 
+  it("selects and clears all items in the current review filter", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "开始扫描" }));
+    fireEvent.click(await screen.findByRole("button", { name: "审阅" }));
+
+    expect(await screen.findByRole("checkbox", { name: /a/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /big.mov/ })).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "选择当前" }));
+    expect(screen.getByRole("checkbox", { name: /a/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /big.mov/ })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "取消当前" }));
+    expect(screen.getByRole("checkbox", { name: /a/ })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /big.mov/ })).not.toBeChecked();
+  });
+
+  it("groups review items by folder and toggles a whole folder", async () => {
+    api.getScanReport.mockResolvedValue({
+      ...report,
+      totalBytes: 500,
+      items: [
+        {
+          id: "cache-1",
+          path: "/Users/test/Library/Caches/App/a.tmp",
+          displayName: "a.tmp",
+          category: "cache",
+          sizeBytes: 120,
+          risk: "low",
+          reason: "缓存",
+          defaultSelected: true
+        },
+        {
+          id: "cache-2",
+          path: "/Users/test/Library/Caches/App/b.tmp",
+          displayName: "b.tmp",
+          category: "logs",
+          sizeBytes: 80,
+          risk: "review",
+          reason: "日志",
+          defaultSelected: false
+        },
+        {
+          id: "download-1",
+          path: "/Users/test/Downloads/pkg.dmg",
+          displayName: "pkg.dmg",
+          category: "downloads",
+          sizeBytes: 300,
+          risk: "review",
+          reason: "下载残留",
+          defaultSelected: false
+        }
+      ]
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "开始扫描" }));
+    fireEvent.click(await screen.findByRole("button", { name: "审阅" }));
+    fireEvent.click(await screen.findByRole("button", { name: "文件夹" }));
+
+    expect(await screen.findByText("App")).toBeInTheDocument();
+    expect(screen.getByText("/Users/test/Library/Caches/App")).toBeInTheDocument();
+    expect(screen.getByText("2 项 · 已选择 1 项")).toBeInTheDocument();
+    expect(screen.getByText("多个分类")).toBeInTheDocument();
+    expect(screen.getAllByTestId("folder-row")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /App/ }));
+    expect(screen.getByText("2 项 · 已选择 2 项")).toBeInTheDocument();
+  });
+
   it("refreshes history with scan summaries after a scan finishes", async () => {
     api.getHistory
       .mockResolvedValueOnce([])

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialSelection, toggleCategory, toggleItem } from "./selection";
+import { createInitialSelection, setItemsSelected, toggleCategory, toggleItem } from "./selection";
 import type { ScanItem } from "../types";
 
 const items: ScanItem[] = [
@@ -53,5 +53,13 @@ describe("selection helpers", () => {
     const clearedCache = toggleCategory(selectedLarge, items, "cache", false);
     expect([...clearedCache]).toEqual(["large-review"]);
   });
-});
 
+  it("selects and clears an arbitrary batch of items", () => {
+    const initial = createInitialSelection(items);
+    const selectedBatch = setItemsSelected(initial, items.slice(1), true);
+    expect([...selectedBatch].sort()).toEqual(["browser-review", "large-review", "low-cache"]);
+
+    const clearedBatch = setItemsSelected(selectedBatch, items.slice(0, 2), false);
+    expect([...clearedBatch]).toEqual(["browser-review"]);
+  });
+});

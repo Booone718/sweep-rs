@@ -107,6 +107,7 @@ button {
 .primary-button,
 .danger-button,
 .review-filters button,
+.review-mode-toggle button,
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -463,9 +464,23 @@ button {
   margin-bottom: 16px;
 }
 
+.review-toolbar-main {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 12px;
+  min-width: 0;
+}
+
 .review-filters {
   display: flex;
   flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review-actions {
+  display: flex;
   flex-wrap: wrap;
   gap: 10px;
   min-width: 0;
@@ -478,7 +493,8 @@ button {
   white-space: nowrap;
 }
 
-.review-filters button {
+.review-filters button,
+.review-mode-toggle button {
   min-height: 36px;
   padding: 0 12px;
   border-radius: 999px;
@@ -486,9 +502,27 @@ button {
   background: #eef3ef;
 }
 
-.review-filters button.active {
+.review-filters button.active,
+.review-mode-toggle button.active {
   color: white;
   background: #16201d;
+}
+
+.review-mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #eef3ef;
+}
+
+.review-mode-toggle button {
+  min-height: 32px;
+  background: transparent;
+}
+
+.compact-button {
+  min-height: 40px;
 }
 
 .review-filters span {

@@ -33,12 +33,15 @@ import {
 import { CATEGORY_LABELS, summarizeCategories } from "./lib/categories";
 import { formatBytes, formatItemCount } from "./lib/format";
 import { waitForScanReport } from "./lib/polling";
-import { createInitialSelection, toggleItem } from "./lib/selection";
+import { groupItemsByFolder, type FolderGroup } from "./lib/reviewGroups";
+import { createReviewIndex, getCategoryFilteredItems } from "./lib/reviewIndex";
+import { createInitialSelection, setItemsSelected, toggleItem } from "./lib/selection";
 import type { CleanReport, CleanupCategory, ScanItem, ScanReport, UserSettings } from "./types";
 
 type View = "overview" | "review" | "history" | "settings";
 type RunState = "idle" | "scanning" | "ready" | "cleaning" | "cleaned" | "error";
 type CategoryFilter = CleanupCategory | "all" | "selected";
+type ReviewMode = "files" | "folders";
 const REVIEW_BATCH_SIZE = 250;
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -76,10 +79,14 @@ const CATEGORY_DESCRIPTIONS: Record<CleanupCategory, string> = {
 };
 
 function riskLabel(item: ScanItem): string {
-  if (item.risk === "low") {
+  return riskLabelFromRisk(item.risk);
+}
+
+function riskLabelFromRisk(risk: ScanItem["risk"]): string {
+  if (risk === "low") {
     return "低风险";
   }
-  if (item.risk === "review") {
+  if (risk === "review") {
     return "需确认";
   }
   return "高风险";
@@ -136,8 +143,11 @@ export default function App() {
     return report.items.filter((item) => selection.has(item.id));
   }, [report, selection]);
   const selectedSummaries = useMemo(() => summarizeCategories(selectedItems), [selectedItems]);
-  const selectedBytes = selectedItems.reduce((sum, item) => sum + item.sizeBytes, 0);
-  const defaultSelectedCount = report?.items.filter((item) => item.defaultSelected && item.risk === "low").length ?? 0;
+  const selectedBytes = useMemo(() => selectedItems.reduce((sum, item) => sum + item.sizeBytes, 0), [selectedItems]);
+  const defaultSelectedCount = useMemo(
+    () => report?.items.filter((item) => item.defaultSelected && item.risk === "low").length ?? 0,
+    [report]
+  );
 
   async function handleStartScan() {
     setRunState("scanning");
@@ -289,6 +299,9 @@ export default function App() {
             selection={selection}
             onFilterChange={setReviewFilter}
             onReveal={(path) => void revealPath(path)}
+            onSetItemsSelected={(items, selected) =>
+              setSelection((current) => setItemsSelected(current, items, selected))
+            }
             onToggleItem={(id) => setSelection((current) => toggleItem(current, id))}
           />
         ) : null}
@@ -351,8 +364,8 @@ function Overview({
           <strong>{formatBytes(report?.totalBytes ?? 0)}</strong>
           <span>
             {includeProtectedUserFolders
-              ? "已开启完整用户目录扫描。深度项默认只展示，不会自动选择。"
-              : "默认避开下载、桌面、文稿等隐私目录；可在设置开启完整扫描。"}
+              ? "已开启扩展用户目录扫描；会避开 macOS 需要授权的目录，避免弹出允许访问提醒。"
+              : "默认避开下载、桌面、文稿等隐私目录；可在设置开启扩展扫描。"}
           </span>
         </div>
         <div className="selection-meter">
@@ -445,86 +458,187 @@ type ReviewProps = {
   items: ScanItem[];
   selection: Set<string>;
   onFilterChange: (filter: CategoryFilter) => void;
+  onSetItemsSelected: (items: ScanItem[], selected: boolean) => void;
   onToggleItem: (id: string) => void;
   onReveal: (path: string) => void;
 };
 
-function Review({ categoryFilter, items, selection, onFilterChange, onToggleItem, onReveal }: ReviewProps) {
-  const categories = summarizeCategories(items);
-  const filteredItems =
-    categoryFilter === "selected"
-      ? items.filter((item) => selection.has(item.id))
-      : categoryFilter === "all"
-        ? items
-        : items.filter((item) => item.category === categoryFilter);
+function Review({
+  categoryFilter,
+  items,
+  selection,
+  onFilterChange,
+  onSetItemsSelected,
+  onToggleItem,
+  onReveal
+}: ReviewProps) {
+  const [reviewMode, setReviewMode] = useState<ReviewMode>("files");
+  const reviewIndex = useMemo(() => createReviewIndex(items), [items]);
+  const categories = reviewIndex.categories;
+  const categoryFilteredItems = getCategoryFilteredItems(reviewIndex, categoryFilter);
+  const selectedFilteredItems = useMemo(
+    () => (categoryFilter === "selected" ? items.filter((item) => selection.has(item.id)) : []),
+    [categoryFilter, items, selection]
+  );
+  const filteredItems = categoryFilter === "selected" ? selectedFilteredItems : categoryFilteredItems;
+  const folderGroups = useMemo(
+    () => (reviewMode === "folders" ? groupItemsByFolder(filteredItems) : []),
+    [filteredItems, reviewMode]
+  );
   const [visibleCount, setVisibleCount] = useState(REVIEW_BATCH_SIZE);
   const visibleItems = filteredItems.slice(0, visibleCount);
+  const visibleFolderGroups = folderGroups.slice(0, visibleCount);
+  const visibleTotal = reviewMode === "folders" ? folderGroups.length : filteredItems.length;
 
   useEffect(() => {
     setVisibleCount(REVIEW_BATCH_SIZE);
-  }, [categoryFilter, items]);
+  }, [categoryFilter, items, reviewMode]);
 
   return (
     <section className="review-layout">
       <div className="review-toolbar">
-        <div className="review-filters">
-          <button
-            className={categoryFilter === "all" ? "active" : ""}
-            onClick={() => onFilterChange("all")}
-            aria-pressed={categoryFilter === "all"}
-          >
-            全部
-          </button>
-          <button
-            className={categoryFilter === "selected" ? "active" : ""}
-            onClick={() => onFilterChange("selected")}
-            aria-pressed={categoryFilter === "selected"}
-          >
-            已选择
-          </button>
-          {categories.map((category) => (
+        <div className="review-toolbar-main">
+          <div className="review-filters">
             <button
-              className={categoryFilter === category.category ? "active" : ""}
-              key={category.category}
-              onClick={() => onFilterChange(category.category)}
-              aria-pressed={categoryFilter === category.category}
+              className={categoryFilter === "all" ? "active" : ""}
+              onClick={() => onFilterChange("all")}
+              aria-pressed={categoryFilter === "all"}
             >
-              <span style={{ backgroundColor: CATEGORY_ACCENTS[category.category] }} />
-              {category.label}
+              全部
             </button>
-          ))}
+            <button
+              className={categoryFilter === "selected" ? "active" : ""}
+              onClick={() => onFilterChange("selected")}
+              aria-pressed={categoryFilter === "selected"}
+            >
+              已选择
+            </button>
+            {categories.map((category) => (
+              <button
+                className={categoryFilter === category.category ? "active" : ""}
+                key={category.category}
+                onClick={() => onFilterChange(category.category)}
+                aria-pressed={categoryFilter === category.category}
+              >
+                <span style={{ backgroundColor: CATEGORY_ACCENTS[category.category] }} />
+                {category.label}
+              </button>
+            ))}
+          </div>
+          <div className="review-actions">
+            <div className="review-mode-toggle" aria-label="审阅展示方式">
+              <button className={reviewMode === "files" ? "active" : ""} onClick={() => setReviewMode("files")}>
+                <FileSearch size={15} />
+                文件
+              </button>
+              <button className={reviewMode === "folders" ? "active" : ""} onClick={() => setReviewMode("folders")}>
+                <FolderOpen size={15} />
+                文件夹
+              </button>
+            </div>
+            <button
+              className="ghost-button compact-button"
+              disabled={filteredItems.length === 0}
+              onClick={() => onSetItemsSelected(filteredItems, true)}
+            >
+              <CheckCircle2 size={15} />
+              选择当前
+            </button>
+            <button
+              className="ghost-button compact-button"
+              disabled={filteredItems.length === 0}
+              onClick={() => onSetItemsSelected(filteredItems, false)}
+            >
+              <Eraser size={15} />
+              取消当前
+            </button>
+          </div>
         </div>
-        <p>已显示 {Math.min(visibleCount, filteredItems.length)} / {filteredItems.length} 项</p>
+        <p>已显示 {Math.min(visibleCount, visibleTotal)} / {visibleTotal} 项</p>
       </div>
       <div className="review-table">
-        {visibleItems.map((item) => (
-          <article className="review-row" data-testid="review-row" key={item.id}>
-            <label>
-              <input checked={selection.has(item.id)} onChange={() => onToggleItem(item.id)} type="checkbox" />
-              <span className="file-identity">
-                <strong>{item.displayName}</strong>
-                <small>{item.path}</small>
-              </span>
-            </label>
-            <span className={`risk-badge ${item.risk}`}>{riskLabel(item)}</span>
-            <span>{CATEGORY_LABELS[item.category]}</span>
-            <strong>{formatBytes(item.sizeBytes)}</strong>
-            <p>{item.reason}</p>
-            <button className="icon-button" title="在 Finder 中显示" onClick={() => onReveal(item.path)}>
-              <FolderOpen size={17} />
-            </button>
-          </article>
-        ))}
+        {reviewMode === "files"
+          ? visibleItems.map((item) => (
+              <article className="review-row" data-testid="review-row" key={item.id}>
+                <label>
+                  <input checked={selection.has(item.id)} onChange={() => onToggleItem(item.id)} type="checkbox" />
+                  <span className="file-identity">
+                    <strong>{item.displayName}</strong>
+                    <small>{item.path}</small>
+                  </span>
+                </label>
+                <span className={`risk-badge ${item.risk}`}>{riskLabel(item)}</span>
+                <span>{CATEGORY_LABELS[item.category]}</span>
+                <strong>{formatBytes(item.sizeBytes)}</strong>
+                <p>{item.reason}</p>
+                <button className="icon-button" title="在 Finder 中显示" onClick={() => onReveal(item.path)}>
+                  <FolderOpen size={17} />
+                </button>
+              </article>
+            ))
+          : visibleFolderGroups.map((group) => (
+              <FolderReviewRow
+                group={group}
+                key={group.id}
+                onReveal={onReveal}
+                onSetItemsSelected={onSetItemsSelected}
+                selection={selection}
+              />
+            ))}
       </div>
-      {visibleCount < filteredItems.length ? (
+      {visibleCount < visibleTotal ? (
         <button
           className="ghost-button load-more-button"
-          onClick={() => setVisibleCount((current) => Math.min(current + REVIEW_BATCH_SIZE, filteredItems.length))}
+          onClick={() => setVisibleCount((current) => Math.min(current + REVIEW_BATCH_SIZE, visibleTotal))}
         >
-          再显示 {Math.min(REVIEW_BATCH_SIZE, filteredItems.length - visibleCount)} 项
+          再显示 {Math.min(REVIEW_BATCH_SIZE, visibleTotal - visibleCount)} 项
         </button>
       ) : null}
     </section>
+  );
+}
+
+function FolderReviewRow({
+  group,
+  selection,
+  onSetItemsSelected,
+  onReveal
+}: {
+  group: FolderGroup;
+  selection: Set<string>;
+  onSetItemsSelected: (items: ScanItem[], selected: boolean) => void;
+  onReveal: (path: string) => void;
+}) {
+  const selectedCount = group.items.filter((item) => selection.has(item.id)).length;
+  const allSelected = selectedCount === group.itemCount;
+  const partiallySelected = selectedCount > 0 && !allSelected;
+
+  return (
+    <article className="review-row folder-row" data-testid="folder-row">
+      <label>
+        <input
+          checked={allSelected}
+          onChange={() => onSetItemsSelected(group.items, !allSelected)}
+          ref={(input) => {
+            if (input) {
+              input.indeterminate = partiallySelected;
+            }
+          }}
+          type="checkbox"
+        />
+        <span className="file-identity">
+          <strong>{group.displayName}</strong>
+          <small>{group.path}</small>
+        </span>
+      </label>
+      <span className={`risk-badge ${group.risk}`}>{riskLabelFromRisk(group.risk)}</span>
+      <span>{group.categoryLabel}</span>
+      <strong>{formatBytes(group.totalBytes)}</strong>
+      <p>{formatItemCount(group.itemCount)} · 已选择 {formatItemCount(selectedCount)}</p>
+      <button className="icon-button" title="在 Finder 中显示" onClick={() => onReveal(group.path)}>
+        <FolderOpen size={17} />
+      </button>
+    </article>
   );
 }
 
@@ -580,8 +694,8 @@ function SettingsView({
     <section className="settings-grid">
       <label className="setting-card">
         <span>
-          <strong>完整用户目录</strong>
-          <small>扫描下载、桌面、文稿等目录；macOS 可能要求授权。</small>
+          <strong>扩展用户目录</strong>
+          <small>扫描更多用户目录，但避开会触发 macOS 授权弹窗的位置。</small>
         </span>
         <input
           checked={settings.includeProtectedUserFolders}

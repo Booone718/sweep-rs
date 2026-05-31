@@ -40,9 +40,9 @@ where
         .follow_links(false)
         .into_iter()
         .filter_entry(|entry| {
+            // These macOS locations can trigger TCC authorization prompts just by traversal.
             !is_excluded(entry.path(), &options.exclusions)
-                && (options.include_protected_user_folders
-                    || !is_macos_privacy_protected_user_path(entry.path(), &options.home_dir))
+                && !is_macos_privacy_protected_user_path(entry.path(), &options.home_dir)
         })
     {
         let entry = match entry {
